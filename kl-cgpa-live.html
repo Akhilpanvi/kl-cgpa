@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGPA Dashboard — KL University</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --card: #16161f; --border: #252535;
+    --accent: #6c63ff; --accent2: #ff6584; --accent3: #43e97b;
+    --text: #e8e8f0; --muted: #7070a0; --gold: #ffd166;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; min-height: 100vh; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(108,99,255,0.04) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(108,99,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
+  }
+  .container { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  /* Header */
+  header { text-align: center; margin-bottom: 48px; }
+  .kl-badge { display: inline-block; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 4px 14px; border-radius: 2px; margin-bottom: 14px; opacity: 0.8; }
+  h1 { font-family: 'Syne', sans-serif; font-size: clamp(2rem, 5vw, 3.6rem); font-weight: 800; letter-spacing: -2px; background: linear-gradient(135deg, #fff 30%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .student-meta { margin-top: 12px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+  .student-meta strong { color: var(--text); }
+
+  /* Status bar */
+  .status-bar {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 28px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+  .status-dot.loading { background: var(--gold); animation: pulse 1.2s infinite; }
+  .status-dot.success { background: var(--accent3); }
+  .status-dot.error   { background: var(--accent2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+  .status-text { flex: 1; font-size: 11px; color: var(--muted); }
+  .status-text strong { color: var(--text); }
+  .status-time { font-size: 10px; color: var(--muted); }
+  .btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: #5a52e0; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Login prompt */
+  .login-prompt {
+    background: var(--card); border: 1px solid rgba(255,101,132,0.3);
+    border-left: 3px solid var(--accent2);
+    border-radius: 0 12px 12px 0; padding: 20px 24px; margin-bottom: 24px; display: none;
+  }
+  .login-prompt h3 { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; color: var(--accent2); margin-bottom: 10px; }
+  .login-prompt p { font-size: 12px; color: var(--muted); line-height: 1.8; }
+  .login-prompt a { color: var(--accent); text-decoration: none; }
+  .login-prompt a:hover { text-decoration: underline; }
+  .login-prompt .steps { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .login-prompt .step { font-size: 11px; color: var(--muted); display: flex; gap: 10px; align-items: flex-start; }
+  .login-prompt .step-num { background: rgba(255,101,132,0.12); color: var(--accent2); border-radius: 4px; padding: 1px 7px; font-size: 10px; flex-shrink: 0; margin-top: 1px; }
+
+  /* Stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; opacity: 0; transform: translateY(16px); transition: all 0.5s ease; }
+  .stats-grid.visible { opacity: 1; transform: translateY(0); }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 20px; position: relative; overflow: hidden; }
+  .stat-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent-color, var(--accent)); }
+  .stat-card.cgpa-card { --accent-color: var(--gold); grid-column: span 2; display: flex; align-items: center; gap: 24px; padding: 26px; }
+  @media(max-width:580px){ .stat-card.cgpa-card { grid-column: span 1; flex-direction: column; text-align: center; } }
+  .cgpa-ring { position: relative; flex-shrink: 0; width: 108px; height: 108px; }
+  .cgpa-ring svg { transform: rotate(-90deg); width: 108px; height: 108px; }
+  .cgpa-ring .track { fill: none; stroke: var(--border); stroke-width: 7; }
+  .cgpa-ring .fill { fill: none; stroke: url(#goldGrad); stroke-width: 7; stroke-linecap: round; stroke-dasharray: 295; stroke-dashoffset: 295; transition: stroke-dashoffset 1.4s cubic-bezier(.22,1,.36,1); }
+  .cgpa-ring .label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .cgpa-ring .label span { font-family: 'Syne', sans-serif; font-size: 1.55rem; font-weight: 800; color: var(--gold); }
+  .cgpa-ring .label small { font-size: 9px; color: var(--muted); letter-spacing: 1px; }
+  .stat-card label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 8px; }
+  .stat-card .value { font-family: 'Syne', sans-serif; font-size: 1.9rem; font-weight: 800; color: var(--text); line-height: 1; }
+  .stat-card .sub { font-size: 10px; color: var(--muted); margin-top: 6px; }
+  .stat-card.credits { --accent-color: var(--accent3); }
+  .stat-card.courses { --accent-color: var(--accent2); }
+  .stat-card.gpcard  { --accent-color: var(--accent); }
+  .formula-row { margin-top: 10px; font-size: 10px; color: var(--muted); }
+  .formula-row strong { color: var(--text); }
+
+  /* Projection */
+  .proj-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 28px; opacity: 0; transition: opacity 0.5s ease 0.15s; }
+  .proj-panel.visible { opacity: 1; }
+  .panel-header { padding: 14px 20px; background: rgba(108,99,255,0.07); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .panel-header h2 { font-family: 'Syne', sans-serif; font-size: 0.9rem; font-weight: 700; color: var(--accent); }
+  .panel-body { padding: 18px 20px; }
+  .subject-rows { display: flex; flex-direction: column; gap: 10px; min-height: 36px; }
+  .subj-row { display: grid; grid-template-columns: 1fr 120px 90px 36px; gap: 8px; align-items: center; animation: fadeDown 0.25s ease; }
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  .si { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; outline: none; width: 100%; transition: border-color 0.2s; }
+  .si:focus { border-color: var(--accent); }
+  .del-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--accent2); cursor: pointer; width: 36px; height: 36px; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+  .del-btn:hover { background: rgba(255,101,132,0.1); border-color: var(--accent2); }
+  .proj-ph { font-size: 11px; color: var(--muted); text-align: center; padding: 8px 0; }
+  .proj-result { background: rgba(255,209,102,0.06); border: 1px solid rgba(255,209,102,0.2); border-radius: 10px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  .pr-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3px; }
+  .pr-val { font-family: 'Syne', sans-serif; font-size: 1.9rem; font-weight: 800; color: var(--gold); }
+  .delta { font-size: 11px; padding: 3px 10px; border-radius: 6px; font-weight: 600; }
+  .delta.up   { background: rgba(67,233,123,0.12); color: var(--accent3); }
+  .delta.down { background: rgba(255,101,132,0.12); color: var(--accent2); }
+  .delta.same { background: rgba(255,255,255,0.05); color: var(--muted); }
+
+  /* Two col */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+  @media(max-width:680px){ .two-col { grid-template-columns: 1fr; } }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; opacity: 0; transition: opacity 0.5s ease 0.2s; }
+  .panel.visible { opacity: 1; }
+  .section-title { font-family: 'Syne', sans-serif; font-size: 0.78rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  /* Grade dist */
+  .grade-bars { display: flex; flex-direction: column; gap: 9px; }
+  .gb-row { display: flex; align-items: center; gap: 10px; }
+  .gb-label { font-size: 10px; width: 26px; text-align: right; color: var(--muted); flex-shrink: 0; }
+  .gb-track { flex: 1; height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .gb-fill { height: 100%; border-radius: 4px; width: 0; transition: width 1s cubic-bezier(.22,1,.36,1); }
+  .gb-count { font-size: 10px; color: var(--muted); min-width: 16px; text-align: right; flex-shrink: 0; }
+
+  /* Top courses */
+  .tc-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .tc-row:last-child { border-bottom: none; }
+  .tc-name { flex: 1; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grade-badge { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 4px; min-width: 30px; text-align: center; flex-shrink: 0; }
+  .g-O  { background: rgba(67,233,123,0.15);  color: #43e97b; }
+  .g-Ap { background: rgba(108,99,255,0.15);  color: #a09aff; }
+  .g-A  { background: rgba(91,182,255,0.15);  color: #5bb6ff; }
+  .g-Bp { background: rgba(255,185,80,0.15);  color: #ffb950; }
+  .g-B  { background: rgba(255,190,120,0.15); color: #ffc178; }
+  .g-P  { background: rgba(120,120,180,0.15); color: #a0a0c0; }
+  .g-GP { background: rgba(255,101,132,0.15); color: #ff6584; }
+  .g-F  { background: rgba(255,80,80,0.15);   color: #ff5050; }
+
+  /* Semester grid */
+  .sem-section { opacity: 0; transition: opacity 0.5s ease 0.25s; margin-bottom: 28px; }
+  .sem-section.visible { opacity: 1; }
+  .sem-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(275px, 1fr)); gap: 12px; }
+  .sem-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .sem-hdr { padding: 11px 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); }
+  .sem-name { font-family: 'Syne', sans-serif; font-size: 0.8rem; font-weight: 700; }
+  .sem-sgpa { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.9rem; color: var(--gold); }
+  .c-row { display: flex; align-items: center; padding: 6px 15px; font-size: 10px; border-bottom: 1px solid rgba(255,255,255,0.03); gap: 8px; }
+  .c-row:last-child { border-bottom: none; }
+  .c-name { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-cr { color: var(--muted); font-size: 9px; min-width: 28px; text-align: right; flex-shrink: 0; }
+
+  /* Table */
+  .tbl-section { opacity: 0; transition: opacity 0.5s ease 0.3s; }
+  .tbl-section.visible { opacity: 1; }
+  .tbl-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .tbl-controls { padding: 13px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .search-box { flex: 1; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; outline: none; transition: border-color 0.2s; }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--muted); }
+  .flt-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 10px; cursor: pointer; transition: all 0.2s; }
+  .flt-btn:hover, .flt-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(108,99,255,0.1); }
+  .tbl-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: var(--surface); padding: 10px 13px; text-align: left; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 13px; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(108,99,255,0.04); }
+  .hidden-row { display: none; }
+  .skeleton { background: linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; height: 12px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="kl-badge">KL University · KLEF · CSE</div>
+    <h1>CGPA Dashboard</h1>
+    <div class="student-meta">
+      <span id="stuName"><strong>—</strong></span>
+      <span id="stuId">ID: <strong>—</strong></span>
+      <span>B.Tech CSE</span>
+    </div>
+  </header>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-dot loading" id="statusDot"></div>
+    <div class="status-text" id="statusText"><strong>Fetching grades from KL ERP…</strong></div>
+    <span class="status-time" id="lastSync"></span>
+    <button class="btn primary" id="refreshBtn" onclick="syncFromERP()" disabled>↺ Refresh</button>
+    <button class="btn" onclick="openERP()">🔗 Open ERP</button>
+  </div>
+
+  <!-- Login prompt (shown if not logged in) -->
+  <div class="login-prompt" id="loginPrompt">
+    <h3>⚠️ Not logged in to ERP</h3>
+    <p>The dashboard couldn't fetch your grades. Please log in to the ERP first, then come back and click Refresh.</p>
+    <div class="steps">
+      <div class="step"><span class="step-num">1</span><span>Click <strong>"🔗 Open ERP"</strong> above — it'll open the KL ERP login page</span></div>
+      <div class="step"><span class="step-num">2</span><span>Log in with your credentials at <a href="https://newerp.kluniversity.in" target="_blank">newerp.kluniversity.in</a></span></div>
+      <div class="step"><span class="step-num">3</span><span>Come back to this tab and click <strong>"↺ Refresh"</strong></span></div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card cgpa-card">
+      <div class="cgpa-ring">
+        <svg viewBox="0 0 108 108">
+          <defs>
+            <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffd166"/>
+              <stop offset="100%" stop-color="#ff9900"/>
+            </linearGradient>
+          </defs>
+          <circle class="track" cx="54" cy="54" r="47"/>
+          <circle class="fill" id="cgpaRing" cx="54" cy="54" r="47"/>
+        </svg>
+        <div class="label">
+          <span id="cgpaRingVal">—</span>
+          <small>/ 10.0</small>
+        </div>
+      </div>
+      <div>
+        <label>Cumulative GPA</label>
+        <div class="value" id="cgpaVal">—</div>
+        <div class="sub" id="cgpaBadge">—</div>
+        <div class="formula-row" id="formulaRow" style="display:none">
+          Σ GP·Cr = <strong id="gpSumF">—</strong> ÷ Credits = <strong id="crF">—</strong>
+        </div>
+      </div>
+    </div>
+    <div class="stat-card credits">
+      <label>GPA Credits</label>
+      <div class="value" id="credVal">—</div>
+      <div class="sub">counted in CGPA</div>
+    </div>
+    <div class="stat-card courses">
+      <label>Total Courses</label>
+      <div class="value" id="totVal">—</div>
+      <div class="sub">registered</div>
+    </div>
+    <div class="stat-card gpcard">
+      <label>Grade Points Sum</label>
+      <div class="value" id="gpVal">—</div>
+      <div class="sub">Σ(GP × Credits)</div>
+    </div>
+  </div>
+
+  <!-- Projection -->
+  <div class="proj-panel" id="projPanel">
+    <div class="panel-header">
+      <h2>📈 CGPA Projection</h2>
+      <button class="btn primary" onclick="addSubject()">+ Add Subject</button>
+    </div>
+    <div class="panel-body">
+      <div class="subject-rows" id="subjectRows">
+        <div class="proj-ph" id="projPh">Add upcoming subjects to project your future CGPA</div>
+      </div>
+      <div class="proj-result" id="projResult" style="display:none">
+        <div><div class="pr-label">Projected CGPA</div><div class="pr-val" id="projCGPA">—</div></div>
+        <div><div class="pr-label">Change</div><div class="delta" id="projDelta">—</div></div>
+        <div><div class="pr-label">Total Credits</div><div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.1rem;color:var(--text)" id="projCr">—</div></div>
+        <div><div class="pr-label">GP Sum</div><div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.1rem;color:var(--text)" id="projGP">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grade dist + Top courses -->
+  <div class="two-col">
+    <div class="panel" id="distPanel">
+      <div class="section-title">Grade Distribution</div>
+      <div class="grade-bars" id="gradeBars"><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton"></div></div>
+    </div>
+    <div class="panel" id="topPanel">
+      <div class="section-title">Highest Credit Courses</div>
+      <div id="topCourses"><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton"></div></div>
+    </div>
+  </div>
+
+  <!-- Semester breakdown -->
+  <div class="sem-section" id="semSection">
+    <div class="section-title" style="margin-bottom:14px">Semester Breakdown</div>
+    <div class="sem-grid" id="semGrid"></div>
+  </div>
+
+  <!-- Table -->
+  <div class="tbl-section" id="tblSection">
+    <div class="section-title" style="margin-bottom:14px">All Courses</div>
+    <div class="tbl-wrap">
+      <div class="tbl-controls">
+        <input type="text" class="search-box" id="searchBox" placeholder="Search course name or code...">
+        <button class="flt-btn active" onclick="filterTbl('all',this)">All</button>
+        <button class="flt-btn" onclick="filterTbl('counted',this)">GPA Counted</button>
+        <button class="flt-btn" onclick="filterTbl('excluded',this)">Excluded</button>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Code</th><th>Course Name</th>
+            <th>Year</th><th>Sem</th><th>Grade</th>
+            <th>GP</th><th>Credits</th><th>Status</th>
+          </tr></thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden iframe for ERP fetch -->
+<iframe id="erpFrame" style="display:none" sandbox="allow-same-origin allow-scripts"></iframe>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────
+const ERP_BASE   = 'https://newerp.kluniversity.in';
+const CGPA_PATH  = '/index.php?r=studentinfo%2Fstudentendexamresult%2Fsearchgetmycgpa';
+const CGPA_URL   = ERP_BASE + CGPA_PATH;
+const CACHE_KEY  = 'kl_cgpa_data';
+const CACHE_TIME = 'kl_cgpa_time';
+
+// ─── State ────────────────────────────────────────────────────────────
+let BASE_CREDS = 0, BASE_GPSUM = 0, BASE_CGPA = 0;
+let subjCount = 0;
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+const isCounted = c => c.credits > 0 && c.grade !== 'GP' && c.grade !== 'P';
+const gradeClass = g => ({'O':'g-O','A+':'g-Ap','A':'g-A','B+':'g-Bp','B':'g-B','P':'g-P','GP':'g-GP','F':'g-F'}[(g||'').trim()] || 'g-P');
+const $ = id => document.getElementById(id);
+const fmt = n => n.toFixed(2);
+
+function setStatus(type, msg) {
+  $('statusDot').className = 'status-dot ' + type;
+  $('statusText').innerHTML = msg;
+  $('refreshBtn').disabled = (type === 'loading');
+}
+
+function openERP() {
+  window.open(CGPA_URL, '_blank');
+}
+
+// ─── Parse ERP HTML ───────────────────────────────────────────────────
+function parseGrades(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const rows = [...doc.querySelectorAll('table tr')].slice(1);
+  const courses = [];
+
+  rows.forEach(row => {
+    const cells = [...row.querySelectorAll('td')].map(c => (c.innerText || c.textContent || '').trim());
+    if (cells.length < 8 || !cells[4]) return;
+    courses.push({
+      code:    cells[3] || '',
+      courseName: cells[4] || '',
+      grade:   cells[5] || '',
+      gp:      parseFloat(cells[6]) || 0,
+      credits: parseFloat(cells[7]) || 0,
+      acYear:  cells[9] || '',
+      sem:     cells[10] || '',
+    });
+  });
+
+  // Student info from page
+  const uid  = (doc.body.innerText || doc.body.textContent || '').match(/23000\d{5}/)?.[0] || '';
+  const name = doc.querySelector('.profile-name, .student-name, h4')?.textContent?.trim() || '';
+
+  return { courses, uid, name };
+}
+
+// ─── Fetch via iframe (same-origin session cookie) ────────────────────
+function fetchViaIframe() {
+  return new Promise((resolve, reject) => {
+    const iframe = $('erpFrame');
+    const timeout = setTimeout(() => reject(new Error('Timeout — ERP took too long to respond')), 15000);
+
+    iframe.onload = () => {
+      clearTimeout(timeout);
+      try {
+        const html = iframe.contentDocument?.documentElement?.outerHTML || '';
+        if (!html || html.length < 500) return reject(new Error('Empty response'));
+        // Check if redirected to login
+        if (html.includes('name="LoginForm"') || html.includes('id="login-form"') || html.includes('type="password"')) {
+          return reject(new Error('NOT_LOGGED_IN'));
+        }
+        resolve(html);
+      } catch(e) {
+        reject(new Error('Cross-origin block — try the direct fetch method'));
+      }
+    };
+    iframe.onerror = () => { clearTimeout(timeout); reject(new Error('iframe load failed')); };
+    iframe.src = CGPA_URL + '&_t=' + Date.now(); // cache-bust
+  });
+}
+
+// ─── Fetch via fetch() API (with session cookie) ──────────────────────
+async function fetchDirect() {
+  const res = await fetch(CGPA_URL, {
+    credentials: 'include',
+    headers: { 'Accept': 'text/html', 'X-Requested-With': '' }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
+  if (html.includes('name="LoginForm"') || html.includes('type="password"')) {
+    throw new Error('NOT_LOGGED_IN');
+  }
+  return html;
+}
+
+// ─── Main sync ────────────────────────────────────────────────────────
+async function syncFromERP() {
+  setStatus('loading', '<strong>Connecting to KL ERP…</strong> fetching your grades');
+  $('loginPrompt').style.display = 'none';
+
+  let html = null;
+
+  // Try fetch() first (faster), fall back to iframe
+  try {
+    html = await fetchDirect();
+  } catch(e1) {
+    if (e1.message === 'NOT_LOGGED_IN') {
+      showLoginPrompt(); return;
+    }
+    // CORS blocked — try iframe
+    try {
+      setStatus('loading', '<strong>Trying alternate method…</strong>');
+      html = await fetchViaIframe();
+    } catch(e2) {
+      if (e2.message === 'NOT_LOGGED_IN') {
+        showLoginPrompt(); return;
+      }
+      setStatus('error', `⚠️ Could not reach ERP: ${e2.message}. Make sure you're logged in, then click Refresh.`);
+      $('loginPrompt').style.display = 'block';
+      loadFromCache(); // show cached data if available
+      return;
+    }
+  }
+
+  const { courses, uid, name } = parseGrades(html);
+
+  if (!courses.length) {
+    setStatus('error', '⚠️ No grade data found — make sure you\'re logged in to the ERP.');
+    $('loginPrompt').style.display = 'block';
+    loadFromCache();
+    return;
+  }
+
+  // Cache it
+  localStorage.setItem(CACHE_KEY, JSON.stringify({ courses, uid, name }));
+  localStorage.setItem(CACHE_TIME, Date.now().toString());
+
+  render({ courses, uid, name }, false);
+}
+
+function showLoginPrompt() {
+  setStatus('error', '⚠️ <strong>Not logged in to ERP.</strong> Log in first, then click Refresh.');
+  $('loginPrompt').style.display = 'block';
+  loadFromCache();
+}
+
+function loadFromCache() {
+  const cached = localStorage.getItem(CACHE_KEY);
+  const time   = localStorage.getItem(CACHE_TIME);
+  if (!cached) return;
+  try {
+    const data = JSON.parse(cached);
+    const ago  = time ? Math.round((Date.now() - parseInt(time)) / 60000) : null;
+    render(data, true, ago);
+  } catch(e) { /* ignore */ }
+}
+
+// ─── Render ───────────────────────────────────────────────────────────
+function render({ courses, uid, name }, fromCache, cacheAgo) {
+  const counted  = courses.filter(isCounted);
+  BASE_CREDS = counted.reduce((s,c) => s + c.credits, 0);
+  BASE_GPSUM = counted.reduce((s,c) => s + c.gp * c.credits, 0);
+  BASE_CGPA  = BASE_CREDS > 0 ? BASE_GPSUM / BASE_CREDS : 0;
+
+  // Student info
+  if (name) $('stuName').innerHTML = `<strong>${name}</strong>`;
+  if (uid)  $('stuId').innerHTML   = `ID: <strong>${uid}</strong>`;
+
+  // Status
+  const now = new Date().toLocaleTimeString();
+  if (fromCache) {
+    const agoTxt = cacheAgo !== null ? ` (cached ${cacheAgo}m ago)` : ' (cached)';
+    setStatus('success', `<strong>Showing cached data${agoTxt}</strong> — click Refresh to fetch live`);
+  } else {
+    setStatus('success', `<strong>✓ Live data loaded</strong> — ${courses.length} courses from KL ERP`);
+  }
+  $('lastSync').textContent = `Last sync: ${now}`;
+
+  renderStats();
+  renderGradeDist(courses);
+  renderTopCourses(courses);
+  renderSemesters(courses);
+  renderTable(courses);
+
+  // Animate in
+  ['statsGrid','projPanel','distPanel','topPanel','semSection','tblSection'].forEach((id, i) => {
+    setTimeout(() => $(id)?.classList.add('visible'), i * 60);
+  });
+
+  // Animate ring
+  setTimeout(() => {
+    const offset = 295 * (1 - Math.min(BASE_CGPA / 10, 1));
+    $('cgpaRing').style.strokeDashoffset = offset;
+  }, 300);
+
+  // Search
+  $('searchBox').oninput = () => {
+    const q = $('searchBox').value.toLowerCase();
+    document.querySelectorAll('#tblBody tr').forEach(tr =>
+      tr.classList.toggle('hidden-row', !tr.dataset.search.includes(q))
+    );
+  };
+}
+
+function renderStats() {
+  $('cgpaRingVal').textContent = fmt(BASE_CGPA);
+  $('cgpaVal').textContent     = fmt(BASE_CGPA);
+  $('cgpaBadge').textContent   = BASE_CGPA >= 9.5 ? '🏆 Exceptional' : BASE_CGPA >= 9 ? '🏆 Outstanding' : BASE_CGPA >= 8 ? '⭐ Excellent' : BASE_CGPA >= 7 ? '✓ Good' : 'Keep going!';
+  $('credVal').textContent = BASE_CREDS;
+  $('gpVal').textContent   = BASE_GPSUM.toFixed(0);
+  $('gpSumF').textContent  = BASE_GPSUM.toFixed(0);
+  $('crF').textContent     = BASE_CREDS;
+  $('formulaRow').style.display = 'block';
+
+  // Total courses in DOM (may differ — count from table)
+  const allRows = document.querySelectorAll('#tblBody tr');
+  $('totVal').textContent = allRows.length || '—';
+}
+
+function renderGradeDist(courses) {
+  const order  = ['O','A+','A','B+','B','P','GP','F'];
+  const colors = {'O':'#43e97b','A+':'#a09aff','A':'#5bb6ff','B+':'#ffb950','B':'#ffc178','P':'#a0a0c0','GP':'#ff6584','F':'#ff5050'};
+  const dist   = {};
+  courses.forEach(c => { dist[c.grade] = (dist[c.grade] || 0) + 1; });
+  const max = Math.max(...Object.values(dist), 1);
+  const el  = $('gradeBars');
+  el.innerHTML = '';
+  order.forEach(g => {
+    if (!dist[g]) return;
+    const row = document.createElement('div');
+    row.className = 'gb-row';
+    row.innerHTML = `
+      <span class="gb-label">${g}</span>
+      <div class="gb-track"><div class="gb-fill" style="background:${colors[g]}" data-w="${dist[g]/max*100}"></div></div>
+      <span class="gb-count">${dist[g]}</span>`;
+    el.appendChild(row);
+  });
+  setTimeout(() => document.querySelectorAll('.gb-fill').forEach(e => e.style.width = e.dataset.w + '%'), 200);
+}
+
+function renderTopCourses(courses) {
+  const top = [...courses].filter(c => c.credits > 0).sort((a,b) => b.credits - a.credits).slice(0, 8);
+  $('topCourses').innerHTML = top.map(c => `
+    <div class="tc-row">
+      <span class="tc-name" title="${c.courseName}">${c.courseName}</span>
+      <span style="font-size:9px;color:var(--muted);margin-right:5px">${c.credits}cr</span>
+      <span class="grade-badge ${gradeClass(c.grade)}">${c.grade}</span>
+    </div>`).join('');
+  // Update total
+  $('totVal').textContent = courses.length;
+}
+
+function renderSemesters(courses) {
+  const map = {};
+  courses.forEach(c => {
+    const k = `${c.acYear} · ${c.sem}`;
+    if (!map[k]) map[k] = [];
+    map[k].push(c);
+  });
+  const grid = $('semGrid');
+  grid.innerHTML = '';
+  Object.entries(map).sort(([a],[b]) => a.localeCompare(b)).forEach(([sem, list]) => {
+    const cnt  = list.filter(isCounted);
+    const cr   = cnt.reduce((s,c) => s + c.credits, 0);
+    const gp   = cnt.reduce((s,c) => s + c.gp * c.credits, 0);
+    const sgpa = cr > 0 ? gp / cr : null;
+    const card = document.createElement('div');
+    card.className = 'sem-card';
+    card.innerHTML = `
+      <div class="sem-hdr">
+        <span class="sem-name">${sem}</span>
+        ${sgpa !== null ? `<span class="sem-sgpa">${sgpa.toFixed(2)}</span>` : ''}
+      </div>
+      ${list.map(c => `
+        <div class="c-row">
+          <span class="c-name" title="${c.courseName}">${c.courseName}</span>
+          <span class="c-cr">${c.credits > 0 ? c.credits + 'cr' : '—'}</span>
+          <span class="grade-badge ${gradeClass(c.grade)}">${c.grade}</span>
+        </div>`).join('')}`;
+    grid.appendChild(card);
+  });
+}
+
+function renderTable(courses) {
+  const tbody = $('tblBody');
+  tbody.innerHTML = '';
+  courses.forEach((c, i) => {
+    const cnt = isCounted(c);
+    const tr  = document.createElement('tr');
+    tr.dataset.counted = cnt ? '1' : '0';
+    tr.dataset.search  = `${c.courseName} ${c.code}`.toLowerCase();
+    tr.innerHTML = `
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="color:var(--accent);font-size:9px">${c.code}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.courseName}">${c.courseName}</td>
+      <td style="color:var(--muted);font-size:9px">${c.acYear}</td>
+      <td style="color:var(--muted);font-size:9px">${c.sem}</td>
+      <td><span class="grade-badge ${gradeClass(c.grade)}">${c.grade}</span></td>
+      <td style="text-align:center">${c.gp || '—'}</td>
+      <td style="text-align:center">${c.credits || '—'}</td>
+      <td style="font-size:9px;color:${cnt ? 'var(--accent3)' : 'var(--muted)'}">${cnt ? '✓ Counted' : '⊘ Excl.'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterTbl(type, btn) {
+  document.querySelectorAll('.flt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#tblBody tr').forEach(tr => {
+    if (type === 'all') tr.classList.remove('hidden-row');
+    else if (type === 'counted') tr.classList.toggle('hidden-row', tr.dataset.counted !== '1');
+    else tr.classList.toggle('hidden-row', tr.dataset.counted !== '0');
+  });
+}
+
+// ─── Projection ───────────────────────────────────────────────────────
+const GRADES = [
+  {l:'O  — 10',v:10},{l:'A+ — 9',v:9},{l:'A  — 8',v:8},
+  {l:'B+ — 7',v:7},{l:'B  — 6',v:6},{l:'C  — 5',v:5},{l:'F  — 0',v:0}
+];
+
+function addSubject() {
+  $('projPh')?.remove();
+  subjCount++;
+  const id  = `s${subjCount}`;
+  const row = document.createElement('div');
+  row.className = 'subj-row'; row.id = id;
+  row.innerHTML = `
+    <input type="text" class="si" placeholder="Subject name (optional)">
+    <select class="si" onchange="recalc()">${GRADES.map(g=>`<option value="${g.v}">${g.l}</option>`).join('')}</select>
+    <input type="number" class="si" value="4" min="1" max="8" oninput="recalc()">
+    <button class="del-btn" onclick="delSubject('${id}')">×</button>`;
+  $('subjectRows').appendChild(row);
+  recalc();
+}
+
+function delSubject(id) {
+  $(id)?.remove();
+  if (!document.querySelector('.subj-row')) {
+    subjCount = 0;
+    $('subjectRows').innerHTML = '<div class="proj-ph" id="projPh">Add upcoming subjects to project your future CGPA</div>';
+    $('projResult').style.display = 'none';
+    return;
+  }
+  recalc();
+}
+
+function recalc() {
+  const rows = [...document.querySelectorAll('.subj-row')];
+  if (!rows.length || BASE_CREDS === 0) return;
+  let addCr = 0, addGP = 0;
+  rows.forEach(r => {
+    const sel = r.querySelector('select');
+    const inp = r.querySelectorAll('input')[1];
+    addCr += parseFloat(inp?.value) || 0;
+    addGP += (parseFloat(sel?.value) || 0) * (parseFloat(inp?.value) || 0);
+  });
+  const newCr   = BASE_CREDS + addCr;
+  const newGP   = BASE_GPSUM + addGP;
+  const proj    = newCr > 0 ? newGP / newCr : BASE_CGPA;
+  const diff    = proj - BASE_CGPA;
+  const dc      = diff > 0.001 ? 'up' : diff < -0.001 ? 'down' : 'same';
+  const dt      = diff > 0.001 ? `▲ +${diff.toFixed(3)}` : diff < -0.001 ? `▼ ${diff.toFixed(3)}` : '→ No change';
+  $('projCGPA').textContent = proj.toFixed(2);
+  $('projDelta').textContent = dt;
+  $('projDelta').className = `delta ${dc}`;
+  $('projCr').textContent  = `${newCr} cr`;
+  $('projGP').textContent  = newGP.toFixed(0);
+  $('projResult').style.display = 'flex';
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Show cached data immediately while fetching live
+  const cached = localStorage.getItem(CACHE_KEY);
+  if (cached) {
+    try {
+      const time = parseInt(localStorage.getItem(CACHE_TIME) || '0');
+      const ago  = Math.round((Date.now() - time) / 60000);
+      render(JSON.parse(cached), true, ago);
+    } catch(e) {}
+  }
+  // Then fetch live
+  syncFromERP();
+});
+</script>
+</body>
+</html>

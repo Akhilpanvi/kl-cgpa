@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGPA Calculator — KL University</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #252535;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --accent3: #43e97b;
+    --text: #e8e8f0;
+    --muted: #7070a0;
+    --gold: #ffd166;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(108,99,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(108,99,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .kl-badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    opacity: 0.8;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.4rem, 5vw, 4rem);
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1.05;
+    background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  header p {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 52px 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--card);
+    margin-bottom: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .upload-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(108,99,255,0.07) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .upload-zone:hover::before,
+  .upload-zone.drag-over::before {
+    opacity: 1;
+  }
+
+  .upload-zone:hover,
+  .upload-zone.drag-over {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .upload-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 16px;
+    background: rgba(108,99,255,0.12);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .upload-icon svg {
+    width: 28px;
+    height: 28px;
+    stroke: var(--accent);
+  }
+
+  .upload-zone h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .upload-zone p {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .upload-zone .format-hint {
+    display: inline-flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 3px 8px;
+    background: rgba(108,99,255,0.15);
+    color: var(--accent);
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }
+
+  #fileInput { display: none; }
+
+  /* Stats Row */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s ease;
+  }
+
+  .stats-grid.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-color, var(--accent));
+  }
+
+  .stat-card.cgpa-card {
+    --accent-color: var(--gold);
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 32px 28px;
+  }
+
+  @media (max-width: 640px) {
+    .stat-card.cgpa-card { grid-column: span 1; flex-direction: column; text-align: center; }
+  }
+
+  .cgpa-ring {
+    position: relative;
+    flex-shrink: 0;
+    width: 100px;
+    height: 100px;
+  }
+
+  .cgpa-ring svg {
+    transform: rotate(-90deg);
+    width: 100px;
+    height: 100px;
+  }
+
+  .cgpa-ring .track {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 6;
+  }
+
+  .cgpa-ring .fill {
+    fill: none;
+    stroke: var(--gold);
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 283;
+    transition: stroke-dashoffset 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .cgpa-ring .label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cgpa-ring .label span {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--gold);
+  }
+
+  .cgpa-ring .label small {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .stat-card label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .stat-card .value {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-card .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .stat-card.credits { --accent-color: var(--accent3); }
+  .stat-card.courses { --accent-color: var(--accent2); }
+
+  /* Semester breakdown */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sem-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+    opacity: 0;
+    transition: opacity 0.5s ease 0.2s;
+  }
+
+  .sem-grid.visible { opacity: 1; }
+
+  .sem-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .sem-header {
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sem-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .sem-sgpa {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    color: var(--gold);
+  }
+
+  .sem-courses {
+    padding: 4px 0;
+  }
+
+  .course-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 18px;
+    font-size: 11px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    gap: 8px;
+  }
+
+  .course-row:last-child { border-bottom: none; }
+
+  .course-name {
+    flex: 1;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10.5px;
+  }
+
+  .course-credits {
+    color: var(--muted);
+    font-size: 10px;
+    min-width: 40px;
+    text-align: center;
+  }
+
+  .grade-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    min-width: 36px;
+    text-align: center;
+  }
+
+  .grade-O  { background: rgba(67,233,123,0.15); color: #43e97b; }
+  .grade-Ap { background: rgba(108,99,255,0.15); color: #a09aff; }
+  .grade-A  { background: rgba(91,182,255,0.15); color: #5bb6ff; }
+  .grade-Bp { background: rgba(255,185,80,0.15); color: #ffb950; }
+  .grade-B  { background: rgba(255,190,120,0.15); color: #ffc178; }
+  .grade-P  { background: rgba(120,120,180,0.15); color: #a0a0c0; }
+  .grade-GP { background: rgba(255,101,132,0.15); color: #ff6584; }
+  .grade-F  { background: rgba(255,80,80,0.15);   color: #ff5050; }
+
+  /* Grade distribution */
+  .grade-dist {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 48px;
+    opacity: 0;
+    transition: opacity 0.5s ease 0.3s;
+  }
+
+  .grade-dist.visible { opacity: 1; }
+
+  .grade-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .grade-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .grade-bar-label {
+    font-size: 11px;
+    width: 28px;
+    text-align: right;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .grade-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .grade-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    width: 0;
+    transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .grade-bar-count {
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 20px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Table */
+  .table-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.5s ease 0.4s;
+    margin-bottom: 48px;
+  }
+
+  .table-wrap.visible { opacity: 1; }
+
+  .table-controls {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .search-box {
+    flex: 1;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--muted); }
+
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(108,99,255,0.1);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  th {
+    background: var(--surface);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 11px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: rgba(108,99,255,0.04); }
+
+  .hidden-row { display: none; }
+
+  /* Formula note */
+  .formula-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 12px 12px 0;
+    padding: 20px 24px;
+    margin-bottom: 48px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+
+  .formula-card strong { color: var(--text); }
+
+  code {
+    font-family: 'DM Mono', monospace;
+    background: rgba(108,99,255,0.12);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-size: 13px;
+    display: none;
+  }
+
+  .results-section { display: none; }
+  .results-section.show { display: block; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  .overflow-table { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="kl-badge">KL University · KLEF</div>
+    <h1>CGPA<br>Calculator</h1>
+    <p>Upload your grade transcript Excel to compute CGPA instantly</p>
+  </header>
+
+  <div class="formula-card">
+    <strong>CGPA Formula Used</strong><br><br>
+    <code>CGPA = Σ(Grade Point × Credits) / Σ(Credits)</code><br><br>
+    Only courses where <code>Credits > 0</code> and the grade point is numeric (not <code>GP</code> or <code>P</code> with 0 credits) are included in the calculation. Courses with <code>GP</code> grade (certifications like AWS, Salesforce) and pass/fail courses with 0 credits are <strong>excluded</strong> from CGPA computation — they still show in the table.
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <h3>Drop your Excel file here</h3>
+    <p>or click to browse from your device</p>
+    <div class="format-hint">
+      <span class="tag">.XLSX</span>
+      <span class="tag">.XLS</span>
+      <span class="tag">.CSV</span>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <div class="results-section" id="results">
+
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card cgpa-card">
+        <div class="cgpa-ring">
+          <svg viewBox="0 0 100 100">
+            <circle class="track" cx="50" cy="50" r="45"/>
+            <circle class="fill" id="cgpaRing" cx="50" cy="50" r="45"/>
+          </svg>
+          <div class="label">
+            <span id="cgpaVal">—</span>
+            <small>CGPA</small>
+          </div>
+        </div>
+        <div>
+          <label>Cumulative GPA</label>
+          <div class="value" id="cgpaLarge">—</div>
+          <div class="sub" id="cgpaSub">Upload a file to compute</div>
+        </div>
+      </div>
+
+      <div class="stat-card credits">
+        <label>Obtained Credits</label>
+        <div class="value" id="creditsVal">—</div>
+        <div class="sub">GPA-counted credits</div>
+      </div>
+
+      <div class="stat-card courses">
+        <label>Total Courses</label>
+        <div class="value" id="coursesVal">—</div>
+        <div class="sub" id="coursesSub">incl. certifications</div>
+      </div>
+
+      <div class="stat-card">
+        <label>Grade Points Sum</label>
+        <div class="value" id="gpSumVal">—</div>
+        <div class="sub">Σ(GP × Credits)</div>
+      </div>
+    </div>
+
+    <div class="section-title">Semester Breakdown</div>
+    <div class="sem-grid" id="semGrid"></div>
+
+    <div class="grade-dist" id="gradeDist">
+      <div class="section-title">Grade Distribution</div>
+      <div class="grade-bars" id="gradeBars"></div>
+    </div>
+
+    <div class="section-title">All Courses</div>
+    <div class="table-wrap" id="tableWrap">
+      <div class="table-controls">
+        <input type="text" class="search-box" id="searchBox" placeholder="Search course name or code...">
+        <button class="filter-btn active" onclick="filterTable('all', this)">All</button>
+        <button class="filter-btn" onclick="filterTable('counted', this)">GPA Counted</button>
+        <button class="filter-btn" onclick="filterTable('excluded', this)">Excluded</button>
+      </div>
+      <div class="overflow-table">
+        <table id="courseTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Code</th>
+              <th>Course Name</th>
+              <th>Sem</th>
+              <th>Grade</th>
+              <th>GP</th>
+              <th>Credits</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = new Uint8Array(e.target.result);
+    const wb   = XLSX.read(data, { type: 'array' });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    parseAndRender(rows);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function findCol(row, candidates) {
+  const keys = Object.keys(row);
+  for (const c of candidates) {
+    const match = keys.find(k => k.trim().toUpperCase().includes(c.toUpperCase()));
+    if (match) return match;
+  }
+  return null;
+}
+
+function gradeClass(g) {
+  if (!g) return 'grade-P';
+  const map = { 'O': 'grade-O', 'A+': 'grade-Ap', 'A': 'grade-A', 'B+': 'grade-Bp', 'B': 'grade-B', 'P': 'grade-P', 'GP': 'grade-GP', 'F': 'grade-F' };
+  return map[g.toString().trim()] || 'grade-P';
+}
+
+function parseAndRender(rows) {
+  if (!rows.length) return;
+
+  const sample = rows[0];
+
+  // Detect column names flexibly
+  const colName    = findCol(sample, ['COURSE NAME','Course Name','CourseName']);
+  const colCode    = findCol(sample, ['COURSE CODE','Course Code','CourseCode']);
+  const colGrade   = findCol(sample, ['GRADE']);
+  const colGP      = findCol(sample, ['GRADE POINT','Grade Point','GP','GradePoint']);
+  const colCreds   = findCol(sample, ['CREDITS','Credit']);
+  const colAcYear  = findCol(sample, ['REG ACADEMIC','Academic Year','AcYear']);
+  const colSem     = findCol(sample, ['REG SEM','Sem','Semester']);
+
+  const courses = rows.map(r => ({
+    name:   (r[colName]   || '').toString().trim(),
+    code:   (r[colCode]   || '').toString().trim(),
+    grade:  (r[colGrade]  || '').toString().trim(),
+    gp:     parseFloat(r[colGP]) || 0,
+    creds:  parseFloat(r[colCreds]) || 0,
+    acYear: (r[colAcYear] || '').toString().trim(),
+    sem:    (r[colSem]    || '').toString().trim(),
+  })).filter(c => c.name);
+
+  // GPA-counted: credits > 0 AND grade not GP AND not (P with 0 creds)
+  const counted  = courses.filter(c => c.creds > 0 && c.grade !== 'GP' && c.grade !== 'P');
+  const totalCreds = counted.reduce((s, c) => s + c.creds, 0);
+  const gpSum      = counted.reduce((s, c) => s + c.gp * c.creds, 0);
+  const cgpa       = totalCreds > 0 ? (gpSum / totalCreds) : 0;
+
+  // Semester grouping
+  const semMap = {};
+  courses.forEach(c => {
+    const key = `${c.acYear} · ${c.sem}`;
+    if (!semMap[key]) semMap[key] = [];
+    semMap[key].push(c);
+  });
+
+  renderStats(cgpa, totalCreds, courses.length, gpSum);
+  renderSemesters(semMap);
+  renderGradeDist(courses);
+  renderTable(courses);
+
+  document.getElementById('results').classList.add('show');
+  setTimeout(() => {
+    document.getElementById('statsGrid').classList.add('visible');
+    document.getElementById('semGrid').classList.add('visible');
+    document.getElementById('gradeDist').classList.add('visible');
+    document.getElementById('tableWrap').classList.add('visible');
+  }, 50);
+
+  // Animate ring
+  setTimeout(() => {
+    const pct = Math.min(cgpa / 10, 1);
+    const circumference = 2 * Math.PI * 45;
+    const offset = circumference * (1 - pct);
+    document.getElementById('cgpaRing').style.strokeDashoffset = offset;
+  }, 200);
+}
+
+function renderStats(cgpa, credits, total, gpSum) {
+  document.getElementById('cgpaVal').textContent   = cgpa.toFixed(2);
+  document.getElementById('cgpaLarge').textContent = cgpa.toFixed(2);
+  document.getElementById('cgpaSub').textContent   = cgpa >= 9 ? '🏆 Outstanding Performance' : cgpa >= 8 ? '⭐ Excellent' : cgpa >= 7 ? '✓ Good Standing' : 'Keep going!';
+  document.getElementById('creditsVal').textContent = credits;
+  document.getElementById('coursesVal').textContent = total;
+  document.getElementById('gpSumVal').textContent   = gpSum.toFixed(0);
+  document.getElementById('coursesSub').textContent = `${total} registered`;
+}
+
+function semSGPA(courses) {
+  const cnt = courses.filter(c => c.creds > 0 && c.grade !== 'GP' && c.grade !== 'P');
+  const cr  = cnt.reduce((s, c) => s + c.creds, 0);
+  const gp  = cnt.reduce((s, c) => s + c.gp * c.creds, 0);
+  return cr > 0 ? gp / cr : null;
+}
+
+function renderSemesters(semMap) {
+  const grid = document.getElementById('semGrid');
+  grid.innerHTML = '';
+  Object.entries(semMap).sort(([a],[b]) => a.localeCompare(b)).forEach(([sem, courses]) => {
+    const sgpa = semSGPA(courses);
+    const card = document.createElement('div');
+    card.className = 'sem-card';
+    card.innerHTML = `
+      <div class="sem-header">
+        <span class="sem-name">${sem}</span>
+        ${sgpa !== null ? `<span class="sem-sgpa">${sgpa.toFixed(2)} SGPA</span>` : ''}
+      </div>
+      <div class="sem-courses">
+        ${courses.map(c => `
+          <div class="course-row">
+            <span class="course-name" title="${c.name}">${c.name}</span>
+            <span class="course-credits">${c.creds > 0 ? c.creds + ' cr' : '—'}</span>
+            <span class="grade-badge ${gradeClass(c.grade)}">${c.grade || '—'}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function renderGradeDist(courses) {
+  const counted = courses.filter(c => c.creds > 0 && c.grade !== 'GP');
+  const gradeOrder = ['O', 'A+', 'A', 'B+', 'B', 'P', 'GP', 'F'];
+  const gradeColors = {
+    'O': '#43e97b', 'A+': '#a09aff', 'A': '#5bb6ff',
+    'B+': '#ffb950', 'B': '#ffc178', 'P': '#a0a0c0', 'GP': '#ff6584', 'F': '#ff5050'
+  };
+  const dist = {};
+  courses.forEach(c => { dist[c.grade] = (dist[c.grade] || 0) + 1; });
+  const max = Math.max(...Object.values(dist));
+
+  const container = document.getElementById('gradeBars');
+  container.innerHTML = '';
+  gradeOrder.forEach(g => {
+    if (!dist[g]) return;
+    const pct = dist[g] / max * 100;
+    const row = document.createElement('div');
+    row.className = 'grade-bar-row';
+    row.innerHTML = `
+      <span class="grade-bar-label">${g}</span>
+      <div class="grade-bar-track"><div class="grade-bar-fill" style="background:${gradeColors[g]||'#aaa'}" data-w="${pct}"></div></div>
+      <span class="grade-bar-count">${dist[g]}</span>
+    `;
+    container.appendChild(row);
+  });
+
+  setTimeout(() => {
+    document.querySelectorAll('.grade-bar-fill').forEach(el => {
+      el.style.width = el.dataset.w + '%';
+    });
+  }, 300);
+}
+
+let allRows = [];
+
+function renderTable(courses) {
+  allRows = courses;
+  buildTable(courses);
+  document.getElementById('searchBox').oninput = () => {
+    const q = document.getElementById('searchBox').value.toLowerCase();
+    document.querySelectorAll('#tableBody tr').forEach(tr => {
+      tr.classList.toggle('hidden-row', !tr.dataset.search.includes(q));
+    });
+  };
+}
+
+function buildTable(courses) {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  courses.forEach((c, i) => {
+    const counted = c.creds > 0 && c.grade !== 'GP' && c.grade !== 'P';
+    const tr = document.createElement('tr');
+    tr.dataset.counted = counted ? '1' : '0';
+    tr.dataset.search  = `${c.name} ${c.code}`.toLowerCase();
+    tr.innerHTML = `
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="color:var(--accent);font-size:10px">${c.code}</td>
+      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</td>
+      <td style="color:var(--muted);font-size:10px">${c.sem}</td>
+      <td><span class="grade-badge ${gradeClass(c.grade)}">${c.grade||'—'}</span></td>
+      <td style="text-align:center">${c.gp || '—'}</td>
+      <td style="text-align:center">${c.creds || '—'}</td>
+      <td style="font-size:10px;color:${counted ? 'var(--accent3)' : 'var(--muted)'}">${counted ? '✓ Counted' : '⊘ Excluded'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterTable(type, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    if (type === 'all') tr.classList.remove('hidden-row');
+    else if (type === 'counted') tr.classList.toggle('hidden-row', tr.dataset.counted !== '1');
+    else if (type === 'excluded') tr.classList.toggle('hidden-row', tr.dataset.counted !== '0');
+  });
+}
+</script>
+</body>
+</html>

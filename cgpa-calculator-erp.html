@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CGPA Calculator — KL University</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #252535;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --accent3: #43e97b;
+    --text: #e8e8f0;
+    --muted: #7070a0;
+    --gold: #ffd166;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(108,99,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(108,99,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  header { text-align: center; margin-bottom: 48px; }
+  .kl-badge {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    opacity: 0.8;
+  }
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.2rem, 5vw, 3.8rem);
+    font-weight: 800;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header p { margin-top: 10px; color: var(--muted); font-size: 12px; letter-spacing: 0.5px; }
+
+  /* Status bar */
+  .status-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .status-dot.loading { background: var(--gold); animation: pulse 1s infinite; }
+  .status-dot.success { background: var(--accent3); }
+  .status-dot.error   { background: var(--accent2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .status-text { font-size: 12px; color: var(--muted); flex: 1; }
+  .status-text strong { color: var(--text); }
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: #5a52e0; }
+
+  /* Manual paste fallback */
+  .fallback-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 0 12px 12px 0;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: none;
+  }
+  .fallback-box h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--gold);
+  }
+  .fallback-box p { color: var(--muted); font-size: 11px; line-height: 1.7; margin-bottom: 14px; }
+  .fallback-box ol { color: var(--muted); font-size: 11px; line-height: 2; padding-left: 18px; margin-bottom: 14px; }
+  .fallback-box ol li code {
+    background: rgba(108,99,255,0.12);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 160px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    resize: vertical;
+    outline: none;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+    opacity: 0; transform: translateY(20px);
+    transition: all 0.5s ease;
+  }
+  .stats-grid.visible { opacity: 1; transform: translateY(0); }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-color, var(--accent));
+  }
+  .stat-card.cgpa-card {
+    --accent-color: var(--gold);
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 28px;
+  }
+  @media(max-width:600px){ .stat-card.cgpa-card { grid-column: span 1; flex-direction: column; text-align: center; } }
+  .cgpa-ring { position: relative; flex-shrink: 0; width: 100px; height: 100px; }
+  .cgpa-ring svg { transform: rotate(-90deg); width: 100px; height: 100px; }
+  .cgpa-ring .track { fill: none; stroke: var(--border); stroke-width: 6; }
+  .cgpa-ring .fill  { fill: none; stroke: var(--gold); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 283; stroke-dashoffset: 283; transition: stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1); }
+  .cgpa-ring .label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .cgpa-ring .label span { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800; color: var(--gold); }
+  .cgpa-ring .label small { font-size: 9px; color: var(--muted); letter-spacing: 1px; }
+  .stat-card label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 8px; }
+  .stat-card .value { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--text); line-height: 1; }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .stat-card.credits { --accent-color: var(--accent3); }
+  .stat-card.courses { --accent-color: var(--accent2); }
+
+  /* Projection panel */
+  .projection-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 32px;
+    opacity: 0;
+    transition: opacity 0.5s ease 0.3s;
+  }
+  .projection-panel.visible { opacity: 1; }
+  .panel-header {
+    padding: 16px 20px;
+    background: rgba(108,99,255,0.08);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .panel-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .panel-body { padding: 20px; }
+  .added-subjects { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .subject-row {
+    display: grid;
+    grid-template-columns: 1fr 100px 80px 36px;
+    gap: 8px;
+    align-items: center;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  .subject-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .subject-input:focus { border-color: var(--accent); }
+  select.subject-input { cursor: pointer; }
+  .del-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--accent2);
+    cursor: pointer;
+    width: 36px; height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .del-btn:hover { background: rgba(255,101,132,0.1); border-color: var(--accent2); }
+  .projected-cgpa {
+    background: rgba(255,209,102,0.06);
+    border: 1px solid rgba(255,209,102,0.2);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .projected-cgpa .label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .projected-cgpa .val {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--gold);
+  }
+  .delta {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+  .delta.up { background: rgba(67,233,123,0.12); color: var(--accent3); }
+  .delta.down { background: rgba(255,101,132,0.12); color: var(--accent2); }
+  .delta.same { background: rgba(255,255,255,0.05); color: var(--muted); }
+
+  /* Semester cards */
+  .sem-section { margin-bottom: 32px; opacity: 0; transition: opacity 0.5s ease 0.4s; }
+  .sem-section.visible { opacity: 1; }
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sem-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .sem-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .sem-header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); }
+  .sem-name { font-family: 'Syne', sans-serif; font-size: 0.82rem; font-weight: 700; }
+  .sem-sgpa { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.95rem; color: var(--gold); }
+  .course-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; font-size: 10.5px; border-bottom: 1px solid rgba(255,255,255,0.03); gap: 8px; }
+  .course-row:last-child { border-bottom: none; }
+  .course-name { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grade-badge { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 4px; min-width: 34px; text-align: center; }
+  .grade-O  { background: rgba(67,233,123,0.15); color: #43e97b; }
+  .grade-Ap { background: rgba(108,99,255,0.15); color: #a09aff; }
+  .grade-A  { background: rgba(91,182,255,0.15); color: #5bb6ff; }
+  .grade-Bp { background: rgba(255,185,80,0.15); color: #ffb950; }
+  .grade-B  { background: rgba(255,190,120,0.15); color: #ffc178; }
+  .grade-P  { background: rgba(120,120,180,0.15); color: #a0a0c0; }
+  .grade-GP { background: rgba(255,101,132,0.15); color: #ff6584; }
+  .course-credits { color: var(--muted); font-size: 10px; min-width: 36px; text-align: right; }
+
+  /* Table */
+  .table-section { opacity: 0; transition: opacity 0.5s ease 0.5s; }
+  .table-section.visible { opacity: 1; }
+  .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .table-controls { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .search-box { flex: 1; min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; outline: none; transition: border-color 0.2s; }
+  .search-box:focus { border-color: var(--accent); }
+  .search-box::placeholder { color: var(--muted); }
+  .filter-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 10px; cursor: pointer; transition: all 0.2s; }
+  .filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(108,99,255,0.1); }
+  .overflow-table { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: var(--surface); padding: 11px 14px; text-align: left; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(108,99,255,0.04); }
+  .hidden-row { display: none; }
+
+  code { font-family: 'DM Mono', monospace; background: rgba(108,99,255,0.12); color: var(--accent); padding: 1px 5px; border-radius: 3px; font-size: 10px; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .results-section { display: none; }
+  .results-section.show { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="kl-badge">KL University · KLEF · 2300033181</div>
+    <h1>CGPA<br>Calculator</h1>
+    <p>Live pull from ERP · CGPA projection · Semester breakdown</p>
+  </header>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="status-dot loading" id="statusDot"></div>
+    <div class="status-text" id="statusText"><strong>Connecting to ERP…</strong> Make sure you're logged in at newerp.kluniversity.in</div>
+    <button class="btn" onclick="tryFetch()">↺ Retry</button>
+    <button class="btn" onclick="showFallback()">Manual Paste</button>
+  </div>
+
+  <!-- Fallback manual paste -->
+  <div class="fallback-box" id="fallbackBox">
+    <h3>📋 Manual Data Entry</h3>
+    <p>CORS blocked the auto-fetch (ERP doesn't allow cross-origin requests from local files). Here's the easiest workaround:</p>
+    <ol>
+      <li>Open <strong>newerp.kluniversity.in</strong> → login → go to Grades page</li>
+      <li>Press <code>F12</code> → Console tab</li>
+      <li>Paste this and press Enter:<br>
+        <code style="display:block;margin-top:6px;padding:8px;font-size:10px;word-break:break-all;">copy(JSON.stringify([...document.querySelectorAll('table tr')].slice(1).map(r=>{let c=[...r.querySelectorAll('td')].map(x=>x.innerText.trim());return{code:c[3],name:c[4],grade:c[5],gp:+c[6],credits:+c[7],acYear:c[9],sem:c[10]}})))</code>
+      </li>
+      <li>Come back here, paste in the box below, click Load</li>
+    </ol>
+    <textarea id="pasteArea" placeholder='Paste JSON here — e.g. [{"code":"23CS...","name":"DATA STRUCTURES","grade":"O","gp":10,"credits":4,...}]'></textarea>
+    <button class="btn primary" onclick="loadFromPaste()">Load Grades →</button>
+  </div>
+
+  <!-- Results -->
+  <div class="results-section" id="results">
+
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card cgpa-card">
+        <div class="cgpa-ring">
+          <svg viewBox="0 0 100 100">
+            <circle class="track" cx="50" cy="50" r="45"/>
+            <circle class="fill" id="cgpaRing" cx="50" cy="50" r="45"/>
+          </svg>
+          <div class="label">
+            <span id="cgpaVal">—</span>
+            <small>CGPA</small>
+          </div>
+        </div>
+        <div>
+          <label>Cumulative GPA</label>
+          <div class="value" id="cgpaLarge">—</div>
+          <div class="sub" id="cgpaSub">Computed from ERP data</div>
+        </div>
+      </div>
+      <div class="stat-card credits">
+        <label>GPA Credits</label>
+        <div class="value" id="creditsVal">—</div>
+        <div class="sub">counted in CGPA</div>
+      </div>
+      <div class="stat-card courses">
+        <label>Total Courses</label>
+        <div class="value" id="coursesVal">—</div>
+        <div class="sub" id="coursesSub">registered</div>
+      </div>
+      <div class="stat-card">
+        <label>Grade Points</label>
+        <div class="value" id="gpSumVal">—</div>
+        <div class="sub">Σ(GP × Credits)</div>
+      </div>
+    </div>
+
+    <!-- Projection -->
+    <div class="projection-panel" id="projPanel">
+      <div class="panel-header">
+        <h2>📈 CGPA Projection</h2>
+        <button class="btn" onclick="addSubjectRow()">+ Add Subject</button>
+      </div>
+      <div class="panel-body">
+        <div class="added-subjects" id="addedSubjects">
+          <div style="font-size:11px;color:var(--muted);text-align:center;padding:12px 0">Click "+ Add Subject" to project your CGPA with upcoming courses</div>
+        </div>
+        <div class="projected-cgpa" id="projectedResult" style="display:none">
+          <div>
+            <div class="label">Projected CGPA</div>
+            <div class="val" id="projVal">—</div>
+          </div>
+          <div style="text-align:right">
+            <div class="label">Change</div>
+            <div class="delta" id="projDelta">—</div>
+          </div>
+          <div style="text-align:right">
+            <div class="label">New Credits</div>
+            <div id="projCredits" style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.2rem;color:var(--text)">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Semesters -->
+    <div class="sem-section" id="semSection">
+      <div class="section-title">Semester Breakdown</div>
+      <div class="sem-grid" id="semGrid"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-section" id="tableSection">
+      <div class="section-title">All Courses</div>
+      <div class="table-wrap">
+        <div class="table-controls">
+          <input type="text" class="search-box" id="searchBox" placeholder="Search by name or code...">
+          <button class="filter-btn active" onclick="filterTable('all',this)">All</button>
+          <button class="filter-btn" onclick="filterTable('counted',this)">GPA Counted</button>
+          <button class="filter-btn" onclick="filterTable('excluded',this)">Excluded</button>
+        </div>
+        <div class="overflow-table">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Code</th><th>Course Name</th>
+                <th>Year</th><th>Sem</th><th>Grade</th>
+                <th>GP</th><th>Credits</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+let allCourses = [];
+let baseCGPA = 0, baseCreds = 0, baseGPSum = 0;
+
+// ─── ERP Fetch ───────────────────────────────────────────
+const ERP_URL = 'https://newerp.kluniversity.in/index.php?r=studentinfo%2Fstudentendexamresult%2Fsearchgetmycgpa';
+
+async function tryFetch() {
+  setStatus('loading', 'Fetching grades from KL ERP…');
+  try {
+    const res = await fetch(ERP_URL, {
+      method: 'GET',
+      credentials: 'include',   // sends your session cookie
+      headers: { 'Accept': 'text/html,application/xhtml+xml' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    const courses = parseERPHTML(html);
+    if (!courses || courses.length === 0) {
+      throw new Error('No grade rows found — are you logged in?');
+    }
+    setStatus('success', `✓ Loaded ${courses.length} courses from ERP`);
+    render(courses);
+  } catch (err) {
+    setStatus('error', `Could not auto-fetch: ${err.message}. Try "Manual Paste" below.`);
+    showFallback();
+  }
+}
+
+function parseERPHTML(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const rows = [...doc.querySelectorAll('table tr')].slice(1);
+  const courses = [];
+  rows.forEach(row => {
+    const cells = [...row.querySelectorAll('td')].map(c => c.innerText?.trim() || c.textContent?.trim() || '');
+    if (cells.length < 8) return;
+    // Try to find columns dynamically — typical ERP layout:
+    // #, UID, Name, Code, CourseName, Grade, GradePoint, Credits, Promotion, AcYear, Sem
+    const code    = cells[3] || '';
+    const name    = cells[4] || '';
+    const grade   = cells[5] || '';
+    const gp      = parseFloat(cells[6]) || 0;
+    const credits = parseFloat(cells[7]) || 0;
+    const acYear  = cells[9] || '';
+    const sem     = cells[10] || '';
+    if (name) courses.push({ code, name, grade, gp, credits, acYear, sem });
+  });
+  return courses;
+}
+
+// ─── Manual paste ────────────────────────────────────────
+function showFallback() {
+  document.getElementById('fallbackBox').style.display = 'block';
+}
+
+function loadFromPaste() {
+  const raw = document.getElementById('pasteArea').value.trim();
+  try {
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data) || !data.length) throw new Error('Expected an array');
+    const courses = data.map(d => ({
+      code: d.code || '',
+      name: d.name || d.courseName || '',
+      grade: d.grade || '',
+      gp: parseFloat(d.gp || d.gradePoint) || 0,
+      credits: parseFloat(d.credits) || 0,
+      acYear: d.acYear || d.academicYear || '',
+      sem: d.sem || d.semester || '',
+    })).filter(c => c.name);
+    if (!courses.length) throw new Error('No valid courses found');
+    setStatus('success', `✓ Loaded ${courses.length} courses from paste`);
+    document.getElementById('fallbackBox').style.display = 'none';
+    render(courses);
+  } catch(e) {
+    alert('Could not parse JSON: ' + e.message);
+  }
+}
+
+// ─── Status helpers ───────────────────────────────────────
+function setStatus(type, msg) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot ' + type;
+  document.getElementById('statusText').innerHTML = msg;
+}
+
+// ─── Grade helpers ────────────────────────────────────────
+function gradeClass(g) {
+  const map = { 'O':'grade-O','A+':'grade-Ap','A':'grade-A','B+':'grade-Bp','B':'grade-B','P':'grade-P','GP':'grade-GP','F':'grade-F' };
+  return map[(g||'').trim()] || 'grade-P';
+}
+function isCounted(c) { return c.credits > 0 && c.grade !== 'GP' && c.grade !== 'P'; }
+
+// ─── Main render ──────────────────────────────────────────
+function render(courses) {
+  allCourses = courses;
+  const counted = courses.filter(isCounted);
+  baseCreds  = counted.reduce((s,c)=>s+c.credits,0);
+  baseGPSum  = counted.reduce((s,c)=>s+c.gp*c.credits,0);
+  baseCGPA   = baseCreds > 0 ? baseGPSum / baseCreds : 0;
+
+  renderStats();
+  renderSemesters(courses);
+  renderTable(courses);
+
+  document.getElementById('results').classList.add('show');
+  setTimeout(()=>{
+    document.getElementById('statsGrid').classList.add('visible');
+    document.getElementById('projPanel').classList.add('visible');
+    document.getElementById('semSection').classList.add('visible');
+    document.getElementById('tableSection').classList.add('visible');
+  }, 50);
+  setTimeout(()=>{
+    const offset = 283 * (1 - Math.min(baseCGPA/10,1));
+    document.getElementById('cgpaRing').style.strokeDashoffset = offset;
+  }, 300);
+
+  document.getElementById('searchBox').oninput = () => {
+    const q = document.getElementById('searchBox').value.toLowerCase();
+    document.querySelectorAll('#tableBody tr').forEach(tr=>{
+      tr.classList.toggle('hidden-row', !tr.dataset.search.includes(q));
+    });
+  };
+}
+
+function renderStats() {
+  document.getElementById('cgpaVal').textContent   = baseCGPA.toFixed(2);
+  document.getElementById('cgpaLarge').textContent = baseCGPA.toFixed(2);
+  document.getElementById('cgpaSub').textContent   = baseCGPA>=9?'🏆 Outstanding':baseCGPA>=8?'⭐ Excellent':baseCGPA>=7?'✓ Good':'Keep going!';
+  document.getElementById('creditsVal').textContent = baseCreds;
+  document.getElementById('coursesVal').textContent = allCourses.length;
+  document.getElementById('gpSumVal').textContent   = baseGPSum.toFixed(0);
+}
+
+function renderSemesters(courses) {
+  const semMap = {};
+  courses.forEach(c=>{
+    const k = `${c.acYear} · ${c.sem}`;
+    if(!semMap[k]) semMap[k]=[];
+    semMap[k].push(c);
+  });
+  const grid = document.getElementById('semGrid');
+  grid.innerHTML = '';
+  Object.entries(semMap).sort(([a],[b])=>a.localeCompare(b)).forEach(([sem,list])=>{
+    const cnt = list.filter(isCounted);
+    const cr  = cnt.reduce((s,c)=>s+c.credits,0);
+    const gp  = cnt.reduce((s,c)=>s+c.gp*c.credits,0);
+    const sgpa = cr>0 ? gp/cr : null;
+    const card = document.createElement('div');
+    card.className = 'sem-card';
+    card.innerHTML = `
+      <div class="sem-header">
+        <span class="sem-name">${sem}</span>
+        ${sgpa!==null?`<span class="sem-sgpa">${sgpa.toFixed(2)}</span>`:''}
+      </div>
+      ${list.map(c=>`
+        <div class="course-row">
+          <span class="course-name" title="${c.name}">${c.name}</span>
+          <span class="course-credits">${c.credits>0?c.credits+'cr':'—'}</span>
+          <span class="grade-badge ${gradeClass(c.grade)}">${c.grade||'—'}</span>
+        </div>
+      `).join('')}
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function renderTable(courses) {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  courses.forEach((c,i)=>{
+    const counted = isCounted(c);
+    const tr = document.createElement('tr');
+    tr.dataset.counted = counted ? '1' : '0';
+    tr.dataset.search  = `${c.name} ${c.code}`.toLowerCase();
+    tr.innerHTML = `
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="color:var(--accent);font-size:9px">${c.code}</td>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</td>
+      <td style="color:var(--muted);font-size:9px">${c.acYear}</td>
+      <td style="color:var(--muted);font-size:9px">${c.sem}</td>
+      <td><span class="grade-badge ${gradeClass(c.grade)}">${c.grade||'—'}</span></td>
+      <td style="text-align:center">${c.gp||'—'}</td>
+      <td style="text-align:center">${c.credits||'—'}</td>
+      <td style="font-size:9px;color:${counted?'var(--accent3)':'var(--muted)'}">${counted?'✓ Counted':'⊘ Excl.'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterTable(type, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#tableBody tr').forEach(tr=>{
+    if(type==='all') tr.classList.remove('hidden-row');
+    else if(type==='counted') tr.classList.toggle('hidden-row', tr.dataset.counted!=='1');
+    else tr.classList.toggle('hidden-row', tr.dataset.counted!=='0');
+  });
+}
+
+// ─── Projection ───────────────────────────────────────────
+const GRADE_OPTIONS = [
+  {label:'O  (10)',  gp:10},
+  {label:'A+ (9)',   gp:9},
+  {label:'A  (8)',   gp:8},
+  {label:'B+ (7)',   gp:7},
+  {label:'B  (6)',   gp:6},
+  {label:'C  (5)',   gp:5},
+  {label:'F  (0)',   gp:0},
+];
+
+let subjectCount = 0;
+
+function addSubjectRow() {
+  const container = document.getElementById('addedSubjects');
+  // Clear placeholder text on first add
+  if (subjectCount === 0) container.innerHTML = '';
+  subjectCount++;
+  const id = `subj_${subjectCount}`;
+  const row = document.createElement('div');
+  row.className = 'subject-row';
+  row.id = id;
+  row.innerHTML = `
+    <input type="text" class="subject-input" placeholder="Subject name (optional)" onchange="recalcProjection()">
+    <select class="subject-input" onchange="recalcProjection()">
+      ${GRADE_OPTIONS.map(g=>`<option value="${g.gp}">${g.label}</option>`).join('')}
+    </select>
+    <input type="number" class="subject-input" placeholder="Credits" min="1" max="7" value="4" onchange="recalcProjection()" oninput="recalcProjection()">
+    <button class="del-btn" onclick="removeSubject('${id}')">×</button>
+  `;
+  container.appendChild(row);
+  recalcProjection();
+}
+
+function removeSubject(id) {
+  document.getElementById(id)?.remove();
+  if (document.getElementById('addedSubjects').children.length === 0) {
+    document.getElementById('addedSubjects').innerHTML = '<div style="font-size:11px;color:var(--muted);text-align:center;padding:12px 0">Click "+ Add Subject" to project your CGPA with upcoming courses</div>';
+    subjectCount = 0;
+    document.getElementById('projectedResult').style.display = 'none';
+    return;
+  }
+  recalcProjection();
+}
+
+function recalcProjection() {
+  const rows = [...document.querySelectorAll('.subject-row')];
+  if (!rows.length) return;
+  let addCreds = 0, addGP = 0;
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll('input,select');
+    const gp   = parseFloat(inputs[1].value) || 0;
+    const cred = parseFloat(inputs[2].value) || 0;
+    addCreds += cred;
+    addGP    += gp * cred;
+  });
+  const newCreds = baseCreds + addCreds;
+  const newGPSum = baseGPSum + addGP;
+  const projCGPA = newCreds > 0 ? newGPSum / newCreds : baseCGPA;
+  const diff = projCGPA - baseCGPA;
+  const deltaClass = diff > 0.001 ? 'up' : diff < -0.001 ? 'down' : 'same';
+  const deltaText  = diff > 0.001 ? `▲ +${diff.toFixed(3)}` : diff < -0.001 ? `▼ ${diff.toFixed(3)}` : `→ No change`;
+
+  document.getElementById('projVal').textContent     = projCGPA.toFixed(2);
+  document.getElementById('projDelta').textContent   = deltaText;
+  document.getElementById('projDelta').className     = `delta ${deltaClass}`;
+  document.getElementById('projCredits').textContent = `${newCreds} cr`;
+  document.getElementById('projectedResult').style.display = 'flex';
+}
+
+// ─── Boot ─────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // Small delay to let page settle
+  setTimeout(tryFetch, 600);
+});
+</script>
+</body>
+</html>
