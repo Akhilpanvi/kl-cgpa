@@ -382,37 +382,46 @@ function setStatus(type, msg, time) {
 async function checkForNewData() {
   setStatus('spin', '<strong>Reading from clipboard…</strong>');
   
+  // Helper function to auto-clean double-stringified data
+  const parseData = (rawText) => {
+    let parsed = JSON.parse(rawText);
+    // If copying from console added extra quotes, it will parse into a string first.
+    // This automatically parses it a second time to get the actual object!
+    if (typeof parsed === 'string') {
+      parsed = JSON.parse(parsed);
+    }
+    if (!parsed.courses?.length) throw new Error('invalid payload');
+    return parsed;
+  };
+
   try {
-    // Attempt to read the data copied by the bookmarklet
+    // Attempt automated clipboard read
     const text = await navigator.clipboard.readText();
-    const data = JSON.parse(text);
+    const data = parseData(text);
     
-    if (!data.courses?.length) throw new Error('invalid payload');
-    
-    // Save to the dashboard's own local storage so it survives page reloads
-    localStorage.setItem(STORE_KEY, text);
+    // Save clean string to local storage
+    localStorage.setItem(STORE_KEY, JSON.stringify(data));
     render(data);
     
   } catch (err) {
-    // If clipboard fails (permissions or empty), check local storage first (for normal page reloads)
+    // Normal page reload check
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       try { 
-        render(JSON.parse(raw)); 
+        render(parseData(raw)); 
         return; 
       } catch(e){}
     }
     
-    // Fallback: Manually ask the user to paste if the browser blocked the clipboard read
-    const manualPaste = prompt("Browser blocked clipboard access. Please manually paste (Ctrl+V) the data you copied from the ERP:");
+    // Manual fallback
+    const manualPaste = prompt("Browser blocked clipboard access. Please manually paste (Ctrl+V) the data:");
     if (manualPaste) {
       try {
-        const data = JSON.parse(manualPaste);
-        if (!data.courses?.length) throw new Error();
-        localStorage.setItem(STORE_KEY, manualPaste);
+        const data = parseData(manualPaste);
+        localStorage.setItem(STORE_KEY, JSON.stringify(data));
         render(data);
       } catch(e) {
-        setStatus('err', '<strong>Invalid data pasted.</strong> Please sync again from ERP.');
+        setStatus('err', '<strong>Invalid data pasted.</strong> Please make sure you copied the whole block.');
       }
     } else {
       setStatus('err', '<strong>No data found.</strong> Please click the bookmarklet on the ERP page first.');
@@ -599,8 +608,11 @@ window.addEventListener('DOMContentLoaded', () => {
     return;
   }
   try {
-    const data = JSON.parse(raw);
-    if (data.courses?.length) render(data);
+    // Also use the clean parser here just in case they have dirty data saved
+    let parsed = JSON.parse(raw);
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    
+    if (parsed.courses?.length) render(parsed);
   } catch(e) {
     $('nodata').style.display='block';
     toggleHowto();
