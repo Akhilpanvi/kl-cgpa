@@ -187,7 +187,6 @@
 <body>
 <div class="wrap">
 
-  <!-- Header -->
   <header>
     <div class="kl-badge">KL University · KLEF · CSE</div>
     <h1>CGPA Dashboard</h1>
@@ -198,7 +197,6 @@
     </div>
   </header>
 
-  <!-- Status bar -->
   <div class="sbar">
     <div class="sdot" id="sdot"></div>
     <div class="stext" id="stext"><strong>No data yet</strong> — sync from ERP to get started</div>
@@ -208,7 +206,6 @@
     <button class="btn" onclick="clearData()">✕ Clear</button>
   </div>
 
-  <!-- How-to card -->
   <div class="howto" id="howtoCard">
     <div class="howto-header" id="howtoHeader" onclick="toggleHowto()">
       <h2>⚡ How to sync your grades from ERP</h2>
@@ -216,7 +213,6 @@
     </div>
     <div class="howto-body" id="howtoBody">
 
-      <!-- Step 1: Bookmarklet -->
       <div class="bm-zone">
         <p>Drag this button to your browser's <strong>bookmarks bar</strong>.<br>Then go to the ERP grades page, click it — data syncs instantly.</p>
         <a class="bm-drag" id="bmLink" href="#" title="Drag me to your bookmarks bar!">📊 KL Sync Grades</a>
@@ -230,7 +226,6 @@
         <div class="step">Switch back to this tab and click <strong>"↺ Check for sync"</strong> — your dashboard will update instantly.</div>
       </div>
 
-      <!-- Alt method: console paste -->
       <div class="alt-method">
         <h3>Alternative: Console method (no bookmarklet)</h3>
         <p style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.7">While on the ERP grades page, open DevTools (F12) → Console, paste this and press Enter:</p>
@@ -242,7 +237,6 @@
     </div>
   </div>
 
-  <!-- Stats -->
   <div class="stats" id="statsGrid">
     <div class="sc cgpa-card">
       <div class="ring">
@@ -270,7 +264,6 @@
     <div class="sc gp"><label>Grade Points Sum</label><div class="val" id="gpVal">—</div><div class="sub">Σ(GP × Credits)</div></div>
   </div>
 
-  <!-- Projection -->
   <div class="proj" id="projPanel">
     <div class="ph">
       <h2>📈 CGPA Projection</h2>
@@ -287,19 +280,16 @@
     </div>
   </div>
 
-  <!-- Grade dist + Top courses -->
   <div class="two">
     <div class="panel" id="distP"><div class="stitle">Grade Distribution</div><div class="gbars" id="gbars"></div></div>
     <div class="panel" id="topP"><div class="stitle">Highest Credit Courses</div><div id="topC"></div></div>
   </div>
 
-  <!-- Semester breakdown -->
   <div class="semsec" id="semSec">
     <div class="stitle" style="margin-bottom:13px">Semester Breakdown</div>
     <div class="semg" id="semG"></div>
   </div>
 
-  <!-- Table -->
   <div class="tblsec" id="tblSec">
     <div class="stitle" style="margin-bottom:13px">All Courses</div>
     <div class="tblw">
@@ -320,7 +310,6 @@
     </div>
   </div>
 
-  <!-- No data state -->
   <div class="nodata" id="nodata">
     <div class="nodata-icon">🎓</div>
     <h3>No grade data yet</h3>
@@ -345,7 +334,7 @@ const gc = g => ({'O':'gO','A+':'gAp','A':'gA','B+':'gBp','B':'gB','P':'gP','GP'
 const fmt = n => n.toFixed(2);
 
 // ─── Build bookmarklet href ────────────────────────────────────
-// This runs ON the ERP page — extracts table data, writes to localStorage, shows alert
+// This runs ON the ERP page — extracts table data, copies to clipboard, shows alert
 function buildBookmarklet() {
   const code = `
 (function(){
@@ -358,21 +347,27 @@ function buildBookmarklet() {
   var nameEl=document.querySelector('.profile-name,.student-name,h4');
   var name=nameEl?nameEl.textContent.trim():'';
   var payload=JSON.stringify({courses:rows,uid:uid,name:name,syncedAt:Date.now()});
-  localStorage.setItem('${STORE_KEY}',payload);
-  localStorage.setItem('${TIME_KEY}',Date.now().toString());
-  localStorage.setItem('${BCAST_KEY}',Date.now().toString());
+  
+  // Create a hidden text area to reliably copy to clipboard
+  var ta=document.createElement('textarea');
+  ta.value=payload;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+
   var d=document.createElement('div');
   d.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:#0a0a0f;color:#43e97b;border:2px solid #43e97b;border-radius:12px;padding:16px 22px;font-family:monospace;font-size:13px;font-weight:bold;box-shadow:0 8px 32px rgba(0,0,0,.5);';
-  d.innerHTML='✓ '+rows.length+' courses synced!<br><span style="font-size:11px;color:#7070a0;font-weight:normal">Switch back to your CGPA Dashboard tab</span>';
+  d.innerHTML='✓ '+rows.length+' courses copied to clipboard!<br><span style="font-size:11px;color:#7070a0;font-weight:normal">Go to your Dashboard tab and click "Check for sync"</span>';
   document.body.appendChild(d);
-  setTimeout(function(){d.remove();},4000);
+  setTimeout(function(){d.remove();},5000);
 })();
 `.replace(/\s+/g,' ').trim();
 
   $('bmLink').href = 'javascript:' + encodeURIComponent(code);
 
   // Console paste version (readable)
-  const consoleCode = `var rows=[...document.querySelectorAll('table tr')].slice(1).map(r=>{var c=[...r.querySelectorAll('td')].map(x=>(x.innerText||'').trim());return c.length>7&&c[4]?{code:c[3],courseName:c[4],grade:c[5],gp:parseFloat(c[6])||0,credits:parseFloat(c[7])||0,acYear:c[9]||'',sem:c[10]||''}:null}).filter(Boolean);localStorage.setItem('${STORE_KEY}',JSON.stringify({courses:rows,uid:document.body.innerText.match(/23000\\d{5}/)?.[0]||'',syncedAt:Date.now()}));localStorage.setItem('${TIME_KEY}',Date.now());alert('✓ '+rows.length+' courses synced! Switch back to dashboard.');`;
+  const consoleCode = `var rows=[...document.querySelectorAll('table tr')].slice(1).map(r=>{var c=[...r.querySelectorAll('td')].map(x=>(x.innerText||'').trim());return c.length>7&&c[4]?{code:c[3],courseName:c[4],grade:c[5],gp:parseFloat(c[6])||0,credits:parseFloat(c[7])||0,acYear:c[9]||'',sem:c[10]||''}:null}).filter(Boolean);var d=JSON.stringify({courses:rows,uid:document.body.innerText.match(/23000\\d{5}/)?.[0]||'',syncedAt:Date.now()});var ta=document.createElement('textarea');ta.value=d;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);alert('✓ Data copied! Switch to dashboard and click Sync');`;
   $('consoleCode').textContent = consoleCode;
 }
 
@@ -383,24 +378,47 @@ function setStatus(type, msg, time) {
   $('stime').textContent = time || '';
 }
 
-// ─── Load from localStorage ────────────────────────────────────
-function checkForNewData() {
-  setStatus('spin', '<strong>Checking for synced data…</strong>');
-  setTimeout(() => {
+// ─── Load from localStorage / Clipboard ────────────────────────
+async function checkForNewData() {
+  setStatus('spin', '<strong>Reading from clipboard…</strong>');
+  
+  try {
+    // Attempt to read the data copied by the bookmarklet
+    const text = await navigator.clipboard.readText();
+    const data = JSON.parse(text);
+    
+    if (!data.courses?.length) throw new Error('invalid payload');
+    
+    // Save to the dashboard's own local storage so it survives page reloads
+    localStorage.setItem(STORE_KEY, text);
+    render(data);
+    
+  } catch (err) {
+    // If clipboard fails (permissions or empty), check local storage first (for normal page reloads)
     const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) {
-      setStatus('err', '<strong>No data found.</strong> Follow the sync steps above first.');
+    if (raw) {
+      try { 
+        render(JSON.parse(raw)); 
+        return; 
+      } catch(e){}
+    }
+    
+    // Fallback: Manually ask the user to paste if the browser blocked the clipboard read
+    const manualPaste = prompt("Browser blocked clipboard access. Please manually paste (Ctrl+V) the data you copied from the ERP:");
+    if (manualPaste) {
+      try {
+        const data = JSON.parse(manualPaste);
+        if (!data.courses?.length) throw new Error();
+        localStorage.setItem(STORE_KEY, manualPaste);
+        render(data);
+      } catch(e) {
+        setStatus('err', '<strong>Invalid data pasted.</strong> Please sync again from ERP.');
+      }
+    } else {
+      setStatus('err', '<strong>No data found.</strong> Please click the bookmarklet on the ERP page first.');
       $('nodata').style.display = 'block';
-      return;
     }
-    try {
-      const data = JSON.parse(raw);
-      if (!data.courses?.length) throw new Error('empty');
-      render(data);
-    } catch(e) {
-      setStatus('err', '<strong>Corrupt data.</strong> Please sync again from ERP.');
-    }
-  }, 400);
+  }
 }
 
 function clearData() {
@@ -568,16 +586,6 @@ function copyConsole() {
     setTimeout(() => { btn.textContent='Copy'; btn.style.color=''; }, 2000);
   });
 }
-
-// ─── Listen for cross-tab sync via storage event ───────────────
-window.addEventListener('storage', e => {
-  if (e.key === STORE_KEY && e.newValue) {
-    try {
-      const data = JSON.parse(e.newValue);
-      if (data.courses?.length) render(data);
-    } catch(err) {}
-  }
-});
 
 // ─── Boot ──────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
