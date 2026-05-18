@@ -380,16 +380,19 @@ function setStatus(type, msg, time) {
 
 // ─── Load from localStorage / Clipboard ────────────────────────
 async function checkForNewData() {
-  setStatus('spin', '<strong>Reading from clipboard…</strong>');
+  setStatus('spin', '<strong>Reading data…</strong>');
   
-  // Helper function to auto-clean double-stringified data
+  // Advanced cleaner: handles double-quotes AND strips accidental console text
   const parseData = (rawText) => {
-    let parsed = JSON.parse(rawText);
-    // If copying from console added extra quotes, it will parse into a string first.
-    // This automatically parses it a second time to get the actual object!
-    if (typeof parsed === 'string') {
-      parsed = JSON.parse(parsed);
-    }
+    let text = rawText.trim();
+    // If you accidentally copied "Here is your raw data: {...", this strips the words away
+    const startIdx = text.search(/[{"]/); 
+    if (startIdx > 0) text = text.substring(startIdx);
+
+    let parsed = JSON.parse(text);
+    // Double-parse if it came out of the console stringified
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    
     if (!parsed.courses?.length) throw new Error('invalid payload');
     return parsed;
   };
@@ -397,35 +400,32 @@ async function checkForNewData() {
   try {
     // Attempt automated clipboard read
     const text = await navigator.clipboard.readText();
-    const data = parseData(text);
+    if (!text) throw new Error('empty clipboard');
     
-    // Save clean string to local storage
+    const data = parseData(text);
     localStorage.setItem(STORE_KEY, JSON.stringify(data));
     render(data);
     
   } catch (err) {
-    // Normal page reload check
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      try { 
-        render(parseData(raw)); 
-        return; 
-      } catch(e){}
-    }
+    // If clipboard is blocked, ALWAYS show the prompt!
+    const manualPaste = prompt("Browser blocked clipboard access. Please manually paste (Ctrl+V) the data you copied:");
     
-    // Manual fallback
-    const manualPaste = prompt("Browser blocked clipboard access. Please manually paste (Ctrl+V) the data:");
     if (manualPaste) {
       try {
         const data = parseData(manualPaste);
         localStorage.setItem(STORE_KEY, JSON.stringify(data));
         render(data);
       } catch(e) {
-        setStatus('err', '<strong>Invalid data pasted.</strong> Please make sure you copied the whole block.');
+        setStatus('err', '<strong>Invalid data pasted.</strong> Please make sure you copied the data correctly.');
       }
     } else {
-      setStatus('err', '<strong>No data found.</strong> Please click the bookmarklet on the ERP page first.');
-      $('nodata').style.display = 'block';
+      // User clicked Cancel on the prompt. Just reload what we had (if anything).
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        try { render(parseData(raw)); } catch(e){}
+      } else {
+        setStatus('err', '<strong>Sync cancelled.</strong>');
+      }
     }
   }
 }
@@ -607,9 +607,10 @@ window.addEventListener('DOMContentLoaded', () => {
     toggleHowto(); // open by default
     return;
   }
+  
   try {
-    // Also use the clean parser here just in case they have dirty data saved
     let parsed = JSON.parse(raw);
+    // Double-parse if it came out of the storage stringified
     if (typeof parsed === 'string') parsed = JSON.parse(parsed);
     
     if (parsed.courses?.length) render(parsed);
